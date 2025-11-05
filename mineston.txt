@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINESTON — Мины</title>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #1e1e30, #0d0d1f);
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        #header {
+            margin-bottom: 30px;
+        }
+        #logo {
+            font-size: 2.8rem;
+            font-weight: bold;
+            color: #4ecdc4;
+            text-shadow: 0 0 15px rgba(78, 205, 196, 0.6);
+            letter-spacing: 2px;
+        }
+        #balance {
+            font-size: 1.4rem;
+            color: #ffda4d;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        .wallet-status {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin: 5px 0 15px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            grid-gap: 12px; /* Исправлено: корректный синтаксис */
+            justify-content: center;
+            margin: 0 auto 40px;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #333;
+            border: 2px solid #555;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+        .cell:hover {
+            background-color: #444;
+            transform: scale(1.05);
+        }
+        .mine {
+            background-color: #d93025;
+            color: white;
+            font-weight: bold;
+        }
+        .safe {
+            background-color: #2e7d32;
+            color: white;
+        }
+        button {
+            padding: 14px 28px;
+            background-color: #4ecdc4;
+            color: black;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #3aa7a3;
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #ff6b6b;
+            height: 40px;
+        }
+        .ton-btn {
+            background-color: #0088cc;
+            color: white;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style> <!-- Закрыт тег <style> -->
+</head>
+<body>
+    <div id="header">
+        <div id="logo">MINESTON</div>
+        <div id="balance">0 TON</div>
+        <div id="wallet-status">Кошелёк не подключён</div>
+        <button class="ton-btn" id="ton-connect-button" onclick="connectWallet()">Подключить кошелёк TON</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <button onclick="restartGame()">Начать заново</button>
+    <div id="message"></div>
+
+    <script>
+        const gridSize = 5;
+        const mineCount = 5;
+        let balance = 0;
+        let gameOver = false;
+        let mines = [];
+        let tonConnect;
+
+        // Ваш кошелёк для получения «проигрышей»
+        const OWNER_WALLET = 'UQBWLwT_iEqOu12Fn4tRWolx22Oqg1Xc9ihjyFY2gL576kcW';
+
+        // Инициализация TON Connect
+        async function initTonConnect() {
+            tonConnect = new TonConnectUI({
+                manifestUrl: 'https://ваш-домен.com/ton-connect-manifest.json',
+                buttonRootId: 'ton-connect-button'
+            });
+
+            tonConnect.uiEvents.on('connect', () => {
+                document.getElementById('wallet-status').textContent =
+                    `Кошелёк подключён: ${tonConnect.wallet.account.address}`;
+            });
+            tonConnect.uiEvents.on('disconnect', () => {
+                document.getElementById('wallet-status').textContent = 'Кошелёк не подключён';
+            });
+        }
+
+        // Подключение кошелька
+        async function connectWallet() {
+            try {
+                await tonConnect.connect();
+            } catch (error) {
+                alert('Ошибка подключения кошелька: ' + error.message);
+            }
+        }
+
+        // Отправка TON игроку
+        async function sendToPlayer(amount) {
+            if (!tonConnect.connected) {
+                alert('Подключите кошелёк TON!');
+                return;
+            }
+
+            try {
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 600,
+                    messages: [
+                        {
+                            address: tonConnect.wallet.account.address,
+                            amount: Math.floor(amount * 1e9).toString()
+                        }
+                    ]
+                };
+
+                const result = await tonConnect.sendTransaction(transaction);
+                console.log('Выплата игроку:', result);
+            } catch (error) {
+                alert('Ошибка выплаты: ' + error.message);
+            }
+        }
+
+        // Отправка «проигрыша» на ваш кошелёк
+        async function sendToOwner(amount) {
+            try {
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 600,
+                    messages: [
+                        {
+                            address: OWNER_WALLET,
+                            amount: Math.floor(amount * 1e9).toString()
+                        }
+                    ]
+                };
+
+                const result = await tonConnect.sendTransaction(transaction);
+                console.log('Проигрыш отправлен владельцу:', result);
+            } catch (error) {
+                console.error('Ошибка отправки на кошелёк владельца:', error);
+            }
+        }
+
+        // Обновление баланса на экране
+        function updateBalance() {
+            document.getElementById('balance').textContent = `${balance.toFixed(2)} TON`;
+        }
+
+        // Инициализация игры
+        function initGame() {
+            gameOver = false;
+            balance = 0;
+            mines = [];
+            document.getElementById('message').textContent = '';
+            updateBalance();
+
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+
+            // Генерация мин
+            const allCells = gridSize * gridSize;
+            const mineIndices = new Set();
+            while (mineIndices
